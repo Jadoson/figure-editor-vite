@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Shape, ShapeType } from '@/types/shape'
 
 const PropertiesPanel = ({

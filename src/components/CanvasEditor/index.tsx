@@ -9,7 +9,7 @@ const CanvasEditor = () => {
   const [shapes, setShapes] = useState<Shape[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
-  const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
+  const [stagePosition, setStagePosition] = useState<Point>({ x: 0, y: 0 })
   const [isDrawing, setIsDrawing] = useState(false)
   const [drawingShape, setDrawingShape] = useState<Shape | null>(null)
   const [selectedShapeType, setSelectedShapeType] = useState<ShapeType | null>(
@@ -19,8 +19,8 @@ const CanvasEditor = () => {
     fill: '#ff0000',
     stroke: '#000000',
   })
-
   const stageRef = useRef<any>(null)
+  const [isDraggingShape, setIsDraggingShape] = useState(false)
 
   const handleWheel = useCallback(
     (e: any) => {
@@ -28,100 +28,39 @@ const CanvasEditor = () => {
       const scaleBy = 1.1
       const stage = stageRef.current
       if (!stage) return
-
       const oldScale = scale
       const pointer = stage.getPointerPosition()
       if (!pointer) return
-
       const newScale =
         e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy
-
-      setOffset({
-        x: pointer.x - (pointer.x - offset.x) * (newScale / oldScale),
-        y: pointer.y - (pointer.y - offset.y) * (newScale / oldScale),
+      const mousePointTo = {
+        x: (pointer.x - stagePosition.x) / oldScale,
+        y: (pointer.y - stagePosition.y) / oldScale,
+      }
+      setStagePosition({
+        x: pointer.x - mousePointTo.x * newScale,
+        y: pointer.y - mousePointTo.y * newScale,
       })
       setScale(newScale)
     },
-    [scale, offset]
+    [scale, stagePosition]
   )
-
-  const handleClick = useCallback(
-    (e: any) => {
-      if (!selectedShapeType) return
-
-      const stage = e.target.getStage()
-      if (!stage) return
-
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-
-      const initialSize = 50
-
-      const newShape: Shape = {
-        id: uuidv4(),
-        type: selectedShapeType,
-        x: (pos.x - offset.x) / scale,
-        y: (pos.y - offset.y) / scale,
-        width: initialSize,
-        height: initialSize,
-        fill: toolSettings.fill,
-        stroke: toolSettings.stroke,
-        strokeWidth: 2,
-      }
-
-      if (selectedShapeType === 'circle') {
-        newShape.width = initialSize * 2
-        newShape.height = initialSize * 2
-      } else if (selectedShapeType === 'triangle') {
-        newShape.width = initialSize
-        newShape.height = (initialSize * Math.sqrt(3)) / 2
-      }
-
-      setShapes((prev) => [...prev, newShape])
-
-      setSelectedShapeType(null)
-    },
-    [selectedShapeType, scale, offset, toolSettings]
-  )
-
   const handleShapeSelection = (shapeType: ShapeType) => {
-    if (selectedShapeType === shapeType) {
-      setSelectedShapeType(null)
-    } else {
-      setSelectedShapeType(shapeType)
-    }
+    setSelectedShapeType((prev) => (prev === shapeType ? null : shapeType))
   }
-
-  const handleUpdateShape = (updated: Shape) => {
-    setShapes((prev) =>
-      prev.map((shape) => (shape.id === updated.id ? updated : shape))
-    )
-  }
-
-  const handleDragEnd = useCallback((id: string, pos: Point) => {
-    setShapes((prev) =>
-      prev.map((shape) =>
-        shape.id === id ? { ...shape, x: pos.x, y: pos.y } : shape
-      )
-    )
-  }, [])
 
   const handleMouseDown = useCallback(
     (e: any) => {
       if (!selectedShapeType) return
       const stage = e.target.getStage()
       if (!stage || e.target !== stage) return
-
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-
+      const absolutePos = stage.getRelativePointerPosition()
       setIsDrawing(true)
-
       setDrawingShape({
-        id: 'temp-' + Date.now(),
+        id: 'temp-' + uuidv4(),
         type: selectedShapeType,
-        x: (pos.x - offset.x) / scale,
-        y: (pos.y - offset.y) / scale,
+        x: absolutePos.x,
+        y: absolutePos.y,
         width: 0,
         height: 0,
         fill: toolSettings.fill,
@@ -129,44 +68,45 @@ const CanvasEditor = () => {
         strokeWidth: 2,
       })
     },
-    [selectedShapeType, scale, offset, toolSettings]
+    [selectedShapeType, toolSettings]
   )
 
   const handleMouseMove = useCallback(
     (e: any) => {
       if (!isDrawing || !drawingShape) return
-
       const stage = e.target.getStage()
       if (!stage) return
+      const absolutePos = stage.getRelativePointerPosition()
+      const newWidth = absolutePos.x - drawingShape.x
+      const newHeight = absolutePos.y - drawingShape.y
 
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-      const currentX = (pos.x - offset.x) / scale
-      const currentY = (pos.y - offset.y) / scale
-
-      const newWidth = currentX - drawingShape.x
-      const newHeight = currentY - drawingShape.y
+      const minWidth = 1
+      const minHeight = 1
 
       setDrawingShape({
         ...drawingShape,
-        width: newWidth,
-        height: newHeight,
+        width: Math.max(newWidth, minWidth),
+        height: Math.max(newHeight, minHeight),
       })
     },
-    [isDrawing, drawingShape, scale, offset]
+    [isDrawing, drawingShape]
   )
-
   const handleMouseUp = useCallback(() => {
     if (isDrawing && drawingShape) {
-      if (
-        Math.abs(drawingShape.width) > 5 &&
-        Math.abs(drawingShape.height) > 5
-      ) {
+      const minWidth = 1
+      const minHeight = 1
+
+      const finalWidth = Math.abs(drawingShape.width)
+      const finalHeight = Math.abs(drawingShape.height)
+
+      if (finalWidth >= minWidth && finalHeight >= minHeight) {
         setShapes((prev) => [
           ...prev,
           {
             ...drawingShape,
-            id: Date.now().toString(),
+            id: uuidv4(),
+            width: finalWidth,
+            height: finalHeight,
             x:
               drawingShape.width > 0
                 ? drawingShape.x
@@ -175,8 +115,6 @@ const CanvasEditor = () => {
               drawingShape.height > 0
                 ? drawingShape.y
                 : drawingShape.y + drawingShape.height,
-            width: Math.abs(drawingShape.width),
-            height: Math.abs(drawingShape.height),
           },
         ])
       }
@@ -185,6 +123,52 @@ const CanvasEditor = () => {
     }
   }, [isDrawing, drawingShape])
 
+  const handleUpdateShape = (updated: Shape) => {
+    setShapes((prev) =>
+      prev.map((shape) => (shape.id === updated.id ? updated : shape))
+    )
+  }
+
+  const handleDragEnd = useCallback((id: string, newPos: Point) => {
+    setShapes((prev) =>
+      prev.map((shape) =>
+        shape.id === id ? { ...shape, x: newPos.x, y: newPos.y } : shape
+      )
+    )
+    setIsDraggingShape(false)
+  }, [])
+
+  const handleDragStart = useCallback(() => {
+    setIsDraggingShape(true)
+  }, [])
+
+  const handleStageDragMove = useCallback(
+    (e: any) => {
+      if (!isDraggingShape) {
+        setStagePosition({
+          x: e.target.x(),
+          y: e.target.y(),
+        })
+      }
+    },
+    [isDraggingShape]
+  )
+
+  const handleStageClick = useCallback(
+    (e: any) => {
+      const target = e.target
+      const clickedOnShape = shapes.some((shape) => {
+        const shapeNode = target.findOne(`#${shape.id}`)
+        return shapeNode !== undefined
+      })
+
+      if (!clickedOnShape) {
+        setSelectedId(null)
+      }
+    },
+    [shapes]
+  )
+
   return (
     <div className='canvas-editor'>
       <div className='toolbar'>
@@ -192,34 +176,35 @@ const CanvasEditor = () => {
           onClick={() => handleShapeSelection('rect')}
           className={selectedShapeType === 'rect' ? 'active' : ''}
         >
-          Rectangle
+          □
         </button>
         <button
           onClick={() => handleShapeSelection('circle')}
           className={selectedShapeType === 'circle' ? 'active' : ''}
         >
-          Circle
+          ○
         </button>
         <button
           onClick={() => handleShapeSelection('triangle')}
           className={selectedShapeType === 'triangle' ? 'active' : ''}
         >
-          Triangle
+          △
         </button>
       </div>
-
       <Stage
         ref={stageRef}
         width={window.innerWidth}
         height={window.innerHeight}
         onWheel={handleWheel}
-        onClick={handleClick}
+        onClick={handleStageClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         scale={{ x: scale, y: scale }}
-        offset={offset}
+        x={stagePosition.x}
+        y={stagePosition.y}
         draggable={!selectedShapeType}
+        onDragMove={handleStageDragMove}
       >
         <Layer>
           {shapes.map((shape) => (
@@ -229,6 +214,7 @@ const CanvasEditor = () => {
               isSelected={shape.id === selectedId}
               onSelect={() => setSelectedId(shape.id)}
               onDragEnd={handleDragEnd}
+              onDragStart={handleDragStart}
             />
           ))}
           {isDrawing && drawingShape && (
@@ -236,7 +222,6 @@ const CanvasEditor = () => {
           )}
         </Layer>
       </Stage>
-
       {selectedId && (
         <PropertiesPanel
           shape={shapes.find((s) => s.id === selectedId)}
@@ -252,11 +237,13 @@ const ShapeComponent = ({
   isSelected,
   onSelect,
   onDragEnd,
+  onDragStart,
 }: {
   shape: Shape
   isSelected: boolean
   onSelect?: () => void
   onDragEnd?: (pos: Point) => void
+  onDragStart?: () => void
 }) => {
   const commonProps = {
     x: shape.x,
@@ -274,19 +261,30 @@ const ShapeComponent = ({
         })
       }
     },
+    onDragStart: () => {
+      if (onDragStart) {
+        onDragStart()
+      }
+    },
   }
 
   switch (shape.type) {
     case 'rect':
-      return <Rect {...commonProps} width={shape.width} height={shape.height} />
+      return (
+        <Rect
+          {...commonProps}
+          width={Math.max(shape.width, 1)}
+          height={Math.max(shape.height, 1)}
+        />
+      )
     case 'circle':
-      return <Circle {...commonProps} radius={shape.width / 2} />
+      return <Circle {...commonProps} radius={Math.max(shape.width / 2, 0.5)} />
     case 'triangle':
       return (
         <RegularPolygon
           {...commonProps}
           sides={3}
-          radius={Math.max(shape.width, shape.height) / 2}
+          radius={Math.max(Math.max(shape.width, shape.height) / 2, 0.5)}
         />
       )
     default:

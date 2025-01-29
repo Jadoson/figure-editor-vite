@@ -15,7 +15,6 @@ export interface Shape {
   fill: string
   stroke: string
   strokeWidth: number
-  [key: string]: any
 }
 
 export interface PositionUpdate {

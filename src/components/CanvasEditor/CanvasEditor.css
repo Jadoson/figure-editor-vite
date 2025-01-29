@@ -18,6 +18,20 @@
   gap: 10px;
 }
 
+.toolbar button {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f5f5f5;
+  cursor: pointer;
+}
+
+.toolbar button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
 .properties-panel {
   position: absolute;
   top: 20px;

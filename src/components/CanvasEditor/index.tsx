@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Stage, Layer, Rect, Circle, RegularPolygon } from 'react-konva'
 import type { Shape, ShapeType, Point } from '@/types/shape'
 import PropertiesPanel from './PropertiesPanel'
@@ -9,27 +9,17 @@ const CanvasEditor = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
-  const [drawingShape, setDrawingShape] = useState<Shape | null>(null)
-  // const [shapeType, setShapeType] = useState<ShapeType>('rect')
-  // const [fillColor, setFillColor] = useState('#ff0000')
-  // const [strokeColor, setStrokeColor] = useState('#000000')
-  const [isDrawing, setIsDrawing] = useState(false)
+  const [selectedShapeType, setSelectedShapeType] = useState<ShapeType | null>(
+    null
+  ) // Выбранная фигура
   const [toolSettings] = useState({
-    type: 'rect' as ShapeType,
     fill: '#ff0000',
     stroke: '#000000',
   })
 
   const stageRef = useRef<any>(null)
 
-  const defaultShape: Partial<Shape> = {
-    fill: '#ff0000',
-    stroke: '#000000',
-    strokeWidth: 2,
-    width: 50,
-    height: 50,
-  }
-
+  // Обработчик зума
   const handleWheel = useCallback(
     (e: any) => {
       e.evt.preventDefault()
@@ -53,34 +43,10 @@ const CanvasEditor = () => {
     [scale, offset]
   )
 
-  const handleMouseDown = useCallback(
+  // Обработчик клика на холст
+  const handleClick = useCallback(
     (e: any) => {
-      const stage = e.target.getStage()
-      if (!stage || e.target !== stage) return
-
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-
-      setIsDrawing(true)
-
-      setDrawingShape({
-        id: 'temp-' + Date.now(),
-        type: toolSettings.type,
-        x: (pos.x - offset.x) / scale,
-        y: (pos.y - offset.y) / scale,
-        width: 0,
-        height: 0,
-        fill: toolSettings.fill,
-        stroke: toolSettings.stroke,
-        strokeWidth: 2,
-      })
-    },
-    [scale, offset, toolSettings]
-  )
-
-  const handleMouseMove = useCallback(
-    (e: any) => {
-      if (!isDrawing || !drawingShape) return
+      if (!selectedShapeType) return // Если фигура не выбрана, ничего не делаем
 
       const stage = e.target.getStage()
       if (!stage) return
@@ -88,39 +54,58 @@ const CanvasEditor = () => {
       const pos = stage.getPointerPosition()
       if (!pos) return
 
-      const newWidth = (pos.x - offset.x) / scale - drawingShape.x
-      const newHeight = (pos.y - offset.y) / scale - drawingShape.y
+      const initialSize = 50 // Начальный размер фигуры
 
-      setDrawingShape({
-        ...drawingShape,
-        width: Math.max(newWidth, 5),
-        height: Math.max(newHeight, 5),
-      })
-    },
-    [isDrawing, drawingShape, scale, offset]
-  )
-  const handleMouseUp = useCallback(() => {
-    if (isDrawing && drawingShape) {
-      if (drawingShape.width > 0 && drawingShape.height > 0) {
-        setShapes((prev) => [
-          ...prev,
-          {
-            ...drawingShape,
-            id: Date.now().toString(),
-          },
-        ])
+      // Создаем фигуру в зависимости от выбранного типа
+      const newShape: Shape = {
+        id: Date.now().toString(),
+        type: selectedShapeType,
+        x: (pos.x - offset.x) / scale,
+        y: (pos.y - offset.y) / scale,
+        width: initialSize,
+        height: initialSize,
+        fill: toolSettings.fill,
+        stroke: toolSettings.stroke,
+        strokeWidth: 2,
       }
-      setDrawingShape(null)
-      setIsDrawing(false)
-    }
-  }, [isDrawing, drawingShape])
 
+      // Для круга и треугольника корректируем размеры
+      if (selectedShapeType === 'circle') {
+        newShape.width = initialSize * 2 // Диаметр круга
+        newShape.height = initialSize * 2
+      } else if (selectedShapeType === 'triangle') {
+        newShape.width = initialSize
+        newShape.height = (initialSize * Math.sqrt(3)) / 2 // Высота треугольника
+      }
+
+      // Добавляем фигуру
+      setShapes((prev) => [...prev, newShape])
+
+      // Сбрасываем выбор фигуры
+      setSelectedShapeType(null)
+    },
+    [selectedShapeType, scale, offset, toolSettings]
+  )
+
+  // Обработчик выбора фигуры
+  const handleShapeSelection = (shapeType: ShapeType) => {
+    if (selectedShapeType === shapeType) {
+      // Если выбрана та же фигура, сбрасываем выбор
+      setSelectedShapeType(null)
+    } else {
+      // Иначе выбираем новую фигуру
+      setSelectedShapeType(shapeType)
+    }
+  }
+
+  // Обработчик обновления фигуры
   const handleUpdateShape = (updated: Shape) => {
     setShapes((prev) =>
       prev.map((shape) => (shape.id === updated.id ? updated : shape))
     )
   }
 
+  // Обработчик перетаскивания фигуры
   const handleDragEnd = useCallback((id: string, pos: Point) => {
     setShapes((prev) =>
       prev.map((shape) =>
@@ -129,71 +114,40 @@ const CanvasEditor = () => {
     )
   }, [])
 
-  const handleClick = useCallback(
-    (e: any) => {
-      const initialSize = 50
-      const stage = e.target.getStage()
-      if (!stage) return
-
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-
-      const x = (pos.x - offset.x) / scale
-      const y = (pos.y - offset.y) / scale
-
-      setShapes((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          type: toolSettings.type,
-          x: (pos.x - offset.x) / scale,
-          y: (pos.y - offset.y) / scale,
-          width: initialSize,
-          height: initialSize,
-          fill: toolSettings.fill,
-          stroke: toolSettings.stroke,
-          strokeWidth: 2,
-        },
-      ])
-    },
-    [scale, offset, toolSettings]
-  )
-
   return (
     <div className='canvas-editor'>
+      {/* Панель инструментов */}
       <div className='toolbar'>
-        <select
-          value={toolSettings.type}
-          onChange={(e) => (toolSettings.type = e.target.value as ShapeType)}
+        <button
+          onClick={() => handleShapeSelection('rect')}
+          className={selectedShapeType === 'rect' ? 'active' : ''}
         >
-          <option value='rect'>Rectangle</option>
-          <option value='circle'>Circle</option>
-          <option value='triangle'>Triangle</option>
-        </select>
-        <input
-          type='color'
-          value={toolSettings.fill}
-          onChange={(e) => (toolSettings.fill = e.target.value)}
-        />
-        <input
-          type='color'
-          value={toolSettings.stroke}
-          onChange={(e) => (toolSettings.stroke = e.target.value)}
-        />
+          Rectangle
+        </button>
+        <button
+          onClick={() => handleShapeSelection('circle')}
+          className={selectedShapeType === 'circle' ? 'active' : ''}
+        >
+          Circle
+        </button>
+        <button
+          onClick={() => handleShapeSelection('triangle')}
+          className={selectedShapeType === 'triangle' ? 'active' : ''}
+        >
+          Triangle
+        </button>
       </div>
 
+      {/* Холст */}
       <Stage
         ref={stageRef}
         width={window.innerWidth}
         height={window.innerHeight}
         onWheel={handleWheel}
         onClick={handleClick}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
         scale={{ x: scale, y: scale }}
         offset={offset}
-        draggable
+        draggable={!selectedShapeType} // Перетаскивание только если фигура не выбрана
       >
         <Layer>
           {shapes.map((shape) => (
@@ -205,13 +159,10 @@ const CanvasEditor = () => {
               onDragEnd={handleDragEnd}
             />
           ))}
-
-          {isDrawing && drawingShape && (
-            <ShapeComponent shape={drawingShape} isSelected={false} />
-          )}
         </Layer>
       </Stage>
 
+      {/* Панель свойств */}
       {selectedId && (
         <PropertiesPanel
           shape={shapes.find((s) => s.id === selectedId)}
@@ -222,6 +173,7 @@ const CanvasEditor = () => {
   )
 }
 
+// Компонент фигуры (без изменений)
 const ShapeComponent = ({
   shape,
   isSelected,

@@ -11,7 +11,7 @@ const CanvasEditor = () => {
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
   const [selectedShapeType, setSelectedShapeType] = useState<ShapeType | null>(
     null
-  ) // Выбранная фигура
+  )
   const [toolSettings] = useState({
     fill: '#ff0000',
     stroke: '#000000',
@@ -19,7 +19,6 @@ const CanvasEditor = () => {
 
   const stageRef = useRef<any>(null)
 
-  // Обработчик зума
   const handleWheel = useCallback(
     (e: any) => {
       e.evt.preventDefault()
@@ -43,10 +42,9 @@ const CanvasEditor = () => {
     [scale, offset]
   )
 
-  // Обработчик клика на холст
   const handleClick = useCallback(
     (e: any) => {
-      if (!selectedShapeType) return // Если фигура не выбрана, ничего не делаем
+      if (!selectedShapeType) return
 
       const stage = e.target.getStage()
       if (!stage) return
@@ -54,9 +52,8 @@ const CanvasEditor = () => {
       const pos = stage.getPointerPosition()
       if (!pos) return
 
-      const initialSize = 50 // Начальный размер фигуры
+      const initialSize = 50
 
-      // Создаем фигуру в зависимости от выбранного типа
       const newShape: Shape = {
         id: Date.now().toString(),
         type: selectedShapeType,
@@ -69,43 +66,35 @@ const CanvasEditor = () => {
         strokeWidth: 2,
       }
 
-      // Для круга и треугольника корректируем размеры
       if (selectedShapeType === 'circle') {
-        newShape.width = initialSize * 2 // Диаметр круга
+        newShape.width = initialSize * 2
         newShape.height = initialSize * 2
       } else if (selectedShapeType === 'triangle') {
         newShape.width = initialSize
-        newShape.height = (initialSize * Math.sqrt(3)) / 2 // Высота треугольника
+        newShape.height = (initialSize * Math.sqrt(3)) / 2
       }
 
-      // Добавляем фигуру
       setShapes((prev) => [...prev, newShape])
 
-      // Сбрасываем выбор фигуры
       setSelectedShapeType(null)
     },
     [selectedShapeType, scale, offset, toolSettings]
   )
 
-  // Обработчик выбора фигуры
   const handleShapeSelection = (shapeType: ShapeType) => {
     if (selectedShapeType === shapeType) {
-      // Если выбрана та же фигура, сбрасываем выбор
       setSelectedShapeType(null)
     } else {
-      // Иначе выбираем новую фигуру
       setSelectedShapeType(shapeType)
     }
   }
 
-  // Обработчик обновления фигуры
   const handleUpdateShape = (updated: Shape) => {
     setShapes((prev) =>
       prev.map((shape) => (shape.id === updated.id ? updated : shape))
     )
   }
 
-  // Обработчик перетаскивания фигуры
   const handleDragEnd = useCallback((id: string, pos: Point) => {
     setShapes((prev) =>
       prev.map((shape) =>
@@ -116,7 +105,6 @@ const CanvasEditor = () => {
 
   return (
     <div className='canvas-editor'>
-      {/* Панель инструментов */}
       <div className='toolbar'>
         <button
           onClick={() => handleShapeSelection('rect')}
@@ -138,7 +126,6 @@ const CanvasEditor = () => {
         </button>
       </div>
 
-      {/* Холст */}
       <Stage
         ref={stageRef}
         width={window.innerWidth}
@@ -147,7 +134,7 @@ const CanvasEditor = () => {
         onClick={handleClick}
         scale={{ x: scale, y: scale }}
         offset={offset}
-        draggable={!selectedShapeType} // Перетаскивание только если фигура не выбрана
+        draggable={!selectedShapeType}
       >
         <Layer>
           {shapes.map((shape) => (
@@ -162,7 +149,6 @@ const CanvasEditor = () => {
         </Layer>
       </Stage>
 
-      {/* Панель свойств */}
       {selectedId && (
         <PropertiesPanel
           shape={shapes.find((s) => s.id === selectedId)}
@@ -173,7 +159,6 @@ const CanvasEditor = () => {
   )
 }
 
-// Компонент фигуры (без изменений)
 const ShapeComponent = ({
   shape,
   isSelected,

@@ -13,6 +13,7 @@ const CanvasEditor = () => {
   // const [shapeType, setShapeType] = useState<ShapeType>('rect')
   // const [fillColor, setFillColor] = useState('#ff0000')
   // const [strokeColor, setStrokeColor] = useState('#000000')
+  const [isDrawing, setIsDrawing] = useState(false)
   const [toolSettings] = useState({
     type: 'rect' as ShapeType,
     fill: '#ff0000',
@@ -60,7 +61,9 @@ const CanvasEditor = () => {
       const pos = stage.getPointerPosition()
       if (!pos) return
 
-      const newShape: Shape = {
+      setIsDrawing(true)
+
+      setDrawingShape({
         id: 'temp-' + Date.now(),
         type: toolSettings.type,
         x: (pos.x - offset.x) / scale,
@@ -70,19 +73,18 @@ const CanvasEditor = () => {
         fill: toolSettings.fill,
         stroke: toolSettings.stroke,
         strokeWidth: 2,
-      }
-
-      setDrawingShape(newShape)
+      })
     },
     [scale, offset, toolSettings]
   )
 
   const handleMouseMove = useCallback(
     (e: any) => {
-      if (!drawingShape) return
+      if (!isDrawing || !drawingShape) return
 
       const stage = e.target.getStage()
       if (!stage) return
+
       const pos = stage.getPointerPosition()
       if (!pos) return
 
@@ -95,20 +97,23 @@ const CanvasEditor = () => {
         height: Math.max(newHeight, 5),
       })
     },
-    [drawingShape, scale, offset]
+    [isDrawing, drawingShape, scale, offset]
   )
   const handleMouseUp = useCallback(() => {
-    if (drawingShape) {
-      setShapes((prev) => [
-        ...prev,
-        {
-          ...drawingShape,
-          id: Date.now().toString(),
-        },
-      ])
+    if (isDrawing && drawingShape) {
+      if (drawingShape.width > 0 && drawingShape.height > 0) {
+        setShapes((prev) => [
+          ...prev,
+          {
+            ...drawingShape,
+            id: Date.now().toString(),
+          },
+        ])
+      }
       setDrawingShape(null)
+      setIsDrawing(false)
     }
-  }, [drawingShape])
+  }, [isDrawing, drawingShape])
 
   const handleUpdateShape = (updated: Shape) => {
     setShapes((prev) =>
@@ -123,6 +128,36 @@ const CanvasEditor = () => {
       )
     )
   }, [])
+
+  const handleClick = useCallback(
+    (e: any) => {
+      const initialSize = 50
+      const stage = e.target.getStage()
+      if (!stage) return
+
+      const pos = stage.getPointerPosition()
+      if (!pos) return
+
+      const x = (pos.x - offset.x) / scale
+      const y = (pos.y - offset.y) / scale
+
+      setShapes((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          type: toolSettings.type,
+          x: (pos.x - offset.x) / scale,
+          y: (pos.y - offset.y) / scale,
+          width: initialSize,
+          height: initialSize,
+          fill: toolSettings.fill,
+          stroke: toolSettings.stroke,
+          strokeWidth: 2,
+        },
+      ])
+    },
+    [scale, offset, toolSettings]
+  )
 
   return (
     <div className='canvas-editor'>
@@ -152,6 +187,7 @@ const CanvasEditor = () => {
         width={window.innerWidth}
         height={window.innerHeight}
         onWheel={handleWheel}
+        onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -165,12 +201,12 @@ const CanvasEditor = () => {
               key={shape.id}
               shape={shape}
               isSelected={shape.id === selectedId}
-              onClick={() => setSelectedId(shape.id)}
+              onSelect={() => setSelectedId(shape.id)}
               onDragEnd={handleDragEnd}
             />
           ))}
 
-          {drawingShape && (
+          {isDrawing && drawingShape && (
             <ShapeComponent shape={drawingShape} isSelected={false} />
           )}
         </Layer>
